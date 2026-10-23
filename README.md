@@ -42,26 +42,77 @@ CLAUDE_MANAGED_ENVIRONMENT_ID=your_environment_id
 PORT=3032
 ```
 
-## How the application was developed
+## How the app was build
 
-The browser collects inputs; the Node host validates requests; the lesson implementation produces observable evidence. The architecture page walks through the real source with numbered steps, prerequisite configuration, source filenames and code excerpts.
+### 1. Declare the illustrative compatibility catalog
 
-### Lesson implementation
+The local fast profile permits low and medium effort; deep permits medium, high and max. These are teaching profiles, not a lookup of current provider model availability.
 
-[src/lesson.ts](https://github.com/luiscoco/Udemy-claude-managed-agents-lesson-c32-app/blob/main/src/lesson.ts)
+Source: [src/lesson.ts](src/lesson.ts#L13)
 
 ```typescript
-  async run(input) {
-
-const catalog:Record<string,string[]>={fast:["low","medium"],deep:["medium","high","max"]};
-const profile=text(input,"profile"),effort=text(input,"effort"),compatible=!!catalog[profile]?.includes(effort);
-return report(compatible?"passed":"rejected",compatible?"Choice matches the illustrative reviewed catalog":"Model profile and effort are incompatible",{compatible,catalogSource:"local illustrative profiles, not provider model IDs",selection:{profile,effort},replacementSemantics:"complete model object"},["Check a reviewed compatibility catalog","Replace rather than merge model configuration","Verify the actual provider response in a live integration"]);
-
-  }
+const catalog: Record<string, string[]> = {
+  fast: ["low", "medium"],
+  deep: ["medium", "high", "max"],
 };
 ```
 
-Read the architecture page for the remaining source excerpts and explanations, including input handling and optional provider behavior. The diagram describes this application, rather than implying that an external integration has been implemented.
+### 2. Check the selected profile and effort
+
+The typed input helpers read both values. Optional chaining rejects an unknown profile or unsupported effort without assuming every model accepts every setting.
+
+Source: [src/lesson.ts](src/lesson.ts#L14)
+
+```typescript
+const profile = text(input, "profile"),
+  effort = text(input, "effort"),
+  compatible = !!catalog[profile]?.includes(effort);
+```
+
+### 3. Inspect selection and replacement semantics
+
+The result preserves the selected values and labels complete-model-object replacement. That field explains the intended update policy; this reducer does not replace a remote model configuration.
+
+Source: [src/lesson.ts](src/lesson.ts#L15)
+
+```typescript
+return report(
+  compatible ? "passed" : "rejected",
+  compatible
+    ? "Choice matches the illustrative reviewed catalog"
+    : "Model profile and effort are incompatible",
+  {
+    compatible,
+    catalogSource: "local illustrative profiles, not provider model IDs",
+    selection: { profile, effort },
+    replacementSemantics: "complete model object",
+  },
+  [
+    "Check a reviewed compatibility catalog",
+    "Replace rather than merge model configuration",
+    "Verify the actual provider response in a live integration",
+  ],
+);
+```
+
+### Check your understanding
+
+Run **Select a reviewed model profile** in the application. Compare the result with these scenario expectations:
+
+```json
+{
+  "input": {
+    "profile": "fast",
+    "effort": "medium"
+  },
+  "expectedOutcome": "passed",
+  "checkEvidence": {
+    "compatible": true
+  }
+}
+```
+
+Then try **Reject an unsupported effort**. Its expected outcome is `rejected`; identify the condition or evidence field that explains the difference.
 
 ## Validation
 
