@@ -1,0 +1,33 @@
+import Anthropic from "@anthropic-ai/sdk";
+export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
+type Choice = { modelId: string; effort: Effort };
+export function checkChoice(choice: Choice, catalog: ReadonlyMap<string,ReadonlySet<Effort>>) {
+  if (!catalog.get(choice.modelId)?.has(choice.effort)) throw new Error("Model/effort not enabled by reviewed host catalog");
+}
+export function modelSessionParams(agentId: string, version: number, environmentId: string, choice: Choice) {
+  return { agent: { type: "agent_with_overrides" as const, id: agentId, version,
+    model: { id: choice.modelId, effort: choice.effort } }, environment_id: environmentId,
+    budget: { type: "limit" as const, max_list_cost: { amount: "50", currency: "USD" as const } } };
+}
+export async function createVerifiedSession(client: Anthropic, agentId: string, version: number,
+  environmentId: string, choice: Choice, catalog: ReadonlyMap<string,ReadonlySet<Effort>>) {
+  checkChoice(choice,catalog);
+  const session = await client.beta.sessions.create(modelSessionParams(agentId,version,environmentId,choice), { maxRetries:0,timeout:10000 });
+  try {
+    const resolved = await client.beta.sessions.retrieve(session.id, {}, { maxRetries:2,timeout:10000 });
+    if (resolved.agent.id !== agentId || resolved.agent.version !== version || resolved.environment_id !== environmentId ||
+        resolved.agent.model.id !== choice.modelId || resolved.agent.model.effort?.type !== choice.effort ||
+        resolved.budget?.max_list_cost.amount !== "50" || resolved.budget.max_list_cost.currency !== "USD")
+      throw new Error("Requested/resolved configuration mismatch");
+    return resolved;
+  } catch {
+    throw Object.assign(new Error("Session exists; verify/reconcile before any prompt"), { sessionId:session.id });
+  }
+}
+// Reviewed catalog is a host policy and must be kept current with provider compatibility.
+// Full model replacement means effort, speed and inference_geo do not implicitly carry over.
+// If speed/geo matter, include and verify them explicitly in the model object as well.
+// No prompt is sent by this helper. A mismatch retains sessionId for bounded cleanup.
+// A failed creation itself can be uncertain even before an ID is returned: reconcile before retry.
+// Primary model configuration is fixed in-session. Native multiagent/advisor models are separate concepts.
+// Pinning helps configuration repeatability, not deterministic task correctness.
